@@ -1,5 +1,6 @@
 import base64
 import requests
+import responses
 
 from io import BytesIO
 from django.core.files.uploadedfile import InMemoryUploadedFile
@@ -9,6 +10,7 @@ from mock import Mock, patch
 
 from rest_framework_proxy.views import ProxyView
 from rest_framework.test import APIRequestFactory
+from rest_framework.response import Response
 from rest_framework_proxy import settings
 from rest_framework_proxy.utils import StreamingMultipart
 
@@ -122,3 +124,60 @@ class ProxyViewHeadersTest(TestCase):
         expected = 'Basic %s' % auth_token
 
         self.assertEqual(headers['Authorization'], expected)
+
+
+class ErrorResponseTest(TestCase):
+
+    def get_view(self, custom_settings=None):
+        view = ProxyView()
+        view.proxy_settings = settings.APISettings(
+            custom_settings, settings.DEFAULTS)
+        return view
+
+    @responses.activate
+    def test_400_error_default(self):
+        view = self.get_view()
+
+        responses.add(responses.GET, 'http://sample',
+                      json={'error': 'error response'}, status=400)
+
+        resp = requests.get('http://sample')
+        proxy_resp = view.create_response(resp)
+
+        self.assertEqual(proxy_resp.__class__.__name__, 'Response')
+        self.assertEqual(proxy_resp.data, {'code': 400, 'error': 'Bad Request'})
+        self.assertEqual(proxy_resp.status_code, 400)
+
+    @responses.activate
+    def test_400_error_default_with_proxied_json(self):
+        view = ProxyView()
+        view = self.get_view(
+            {'RETURN_RAW_ERROR': True})
+
+        responses.add(responses.GET, 'http://sample',
+                      json={'error': 'error response'}, status=400)
+
+        resp = requests.get('http://sample')
+        proxy_resp = view.create_response(resp)
+
+        self.assertEqual(proxy_resp.__class__.__name__, 'HttpResponse')
+        self.assertEqual(proxy_resp.content, b'{"error": "error response"}')
+        self.assertEqual(proxy_resp.status_code, 400)
+        self.assertEqual(proxy_resp._headers['content-type'][1], 'application/json')
+
+    @responses.activate
+    def test_400_error_default_with_proxied_text(self):
+        view = ProxyView()
+        view = self.get_view(
+            {'RETURN_RAW_ERROR': True})
+
+        responses.add(responses.GET, 'http://sample',
+                      body="error response text", status=400)
+
+        resp = requests.get('http://sample')
+        proxy_resp = view.create_response(resp)
+
+        self.assertEqual(proxy_resp.__class__.__name__, 'HttpResponse')
+        self.assertEqual(proxy_resp.content, b'error response text')
+        self.assertEqual(proxy_resp.status_code, 400)
+        self.assertEqual(proxy_resp._headers['content-type'][1], 'text/plain')

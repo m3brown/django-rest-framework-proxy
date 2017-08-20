@@ -20,6 +20,9 @@ DEFAULTS = {
     # Return response as-is if enabled
     'RETURN_RAW': False,
 
+    # Return failure response as-is if code >= 400
+    'RETURN_RAW_ERROR': False,
+
     # Used to translate Accept HTTP field
     'ACCEPT_MAPS': {
         'text/html': 'application/json',

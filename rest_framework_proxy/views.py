@@ -22,6 +22,7 @@ class BaseProxyView(APIView):
     proxy_host = None
     source = None
     return_raw = False
+    return_raw_error = False
     verify_ssl = None
 
 
@@ -131,11 +132,13 @@ class ProxyView(BaseProxyView):
             return parsed
 
     def create_response(self, response):
-        if self.return_raw or self.proxy_settings.RETURN_RAW:
+        status = response.status_code
+        if ((self.return_raw or self.proxy_settings.RETURN_RAW) or
+            (status >= 400 and (self.return_raw_error or self.proxy_settings.RETURN_RAW_ERROR))):
+
             return HttpResponse(response.text, status=response.status_code,
                     content_type=response.headers.get('content-type'))
 
-        status = response.status_code
         if status >= 400:
             body = {
                 'code': status,
